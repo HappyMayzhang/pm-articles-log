@@ -1,0 +1,46 @@
+name: notify-wechat
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - latest.md
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send to WeChat via PushPlus
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request
+
+          with open("latest.md", "r", encoding="utf-8") as f:
+              content = f.read()
+
+          lines = content.splitlines()
+          title = lines[0].lstrip("#").strip() if lines else "今日产品经理文章推荐"
+
+          payload = json.dumps({
+              "token": os.environ["PUSHPLUS_TOKEN"],
+              "title": title,
+              "content": content,
+              "template": "markdown",
+          }).encode("utf-8")
+
+          req = urllib.request.Request(
+              "https://www.pushplus.plus/send",
+              data=payload,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=15) as resp:
+              result = resp.read().decode("utf-8")
+              print(result)
+              data = json.loads(result)
+              if data.get("code") != 200:
+                  raise SystemExit(f"PushPlus failed: {result}")
+          EOF
